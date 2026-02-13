@@ -53,7 +53,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        model: 'mistralai/Mistral-7B-Instruct-v0.3',
+        model: 'HuggingFaceTB/SmolLM3-3B',
         messages,
         max_tokens: 800,
         temperature: 0.8,
