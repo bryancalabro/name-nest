@@ -30,7 +30,7 @@ export async function generateNames(gender, style, origin, count = 6) {
   }
 
   const data = await response.json()
-  const generatedText = data[0]?.generated_text || ''
+  const generatedText = data.generated_text || ''
 
   const jsonMatch = generatedText.match(/\[[\s\S]*?\]/)
   if (jsonMatch) {

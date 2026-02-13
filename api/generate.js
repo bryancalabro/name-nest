@@ -1,17 +1,24 @@
-const API_URL = 'https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2'
+const API_URL = 'https://router.huggingface.co/v1/chat/completions'
 
-function buildPrompt(gender, style, origin, count) {
+function buildMessages(gender, style, origin, count) {
   const genderText = gender === 'surprise' ? 'any gender (mix of boy and girl names)' : `a ${gender}`
   const originText = origin === 'any' ? 'any cultural origin' : origin
 
-  return `<s>[INST] You are a baby name expert. Generate exactly ${count} unique baby names for ${genderText}. Style: ${style}. Cultural origin: ${originText}.
+  return [
+    {
+      role: 'system',
+      content: 'You are a baby name expert. You always respond with ONLY a valid JSON array, no other text.',
+    },
+    {
+      role: 'user',
+      content: `Generate exactly ${count} unique baby names for ${genderText}. Style: ${style}. Cultural origin: ${originText}.
 
 For each name, provide the name, its meaning, and cultural origin.
 
-You MUST respond with ONLY a valid JSON array, no other text. Format:
-[{"name": "Example", "meaning": "meaning here", "origin": "origin here"}]
-
-Generate exactly ${count} names now: [/INST]`
+Respond with ONLY a JSON array in this exact format, nothing else:
+[{"name": "Example", "meaning": "meaning here", "origin": "origin here"}]`,
+    },
+  ]
 }
 
 export default async function handler(req, res) {
@@ -29,7 +36,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing required fields.' })
   }
 
-  const prompt = buildPrompt(gender, style, origin, Math.min(Number(count), 10))
+  const messages = buildMessages(gender, style, origin, Math.min(Number(count), 10))
 
   try {
     const response = await fetch(API_URL, {
@@ -39,13 +46,10 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({
-        inputs: prompt,
-        parameters: {
-          max_new_tokens: 800,
-          temperature: 0.8,
-          top_p: 0.95,
-          return_full_text: false,
-        },
+        model: 'mistralai/Mistral-7B-Instruct-v0.3',
+        messages,
+        max_tokens: 800,
+        temperature: 0.8,
       }),
     })
 
@@ -54,11 +58,12 @@ export default async function handler(req, res) {
       if (response.status === 503) {
         return res.status(503).json({ error: 'The AI model is loading. Please wait a moment and try again.' })
       }
-      return res.status(response.status).json({ error: errorData.error || `API error: ${response.status}` })
+      return res.status(response.status).json({ error: errorData.error || errorData.message || `API error: ${response.status}` })
     }
 
     const data = await response.json()
-    return res.status(200).json(data)
+    const text = data.choices?.[0]?.message?.content || ''
+    return res.status(200).json({ generated_text: text })
   } catch (err) {
     return res.status(500).json({ error: 'Failed to reach the AI service. Please try again.' })
   }
