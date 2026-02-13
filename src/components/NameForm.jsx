@@ -17,18 +17,19 @@ const STYLES = [
 
 const ORIGINS = [
   { value: 'any', label: 'Any Origin' },
+  { value: 'African', label: 'African' },
+  { value: 'Arabic', label: 'Arabic' },
+  { value: 'English', label: 'English' },
+  { value: 'French', label: 'French' },
+  { value: 'Greek', label: 'Greek' },
+  { value: 'Hebrew', label: 'Hebrew' },
+  { value: 'Indian', label: 'Indian' },
   { value: 'Irish', label: 'Irish' },
   { value: 'Italian', label: 'Italian' },
-  { value: 'Spanish', label: 'Spanish' },
   { value: 'Japanese', label: 'Japanese' },
-  { value: 'Arabic', label: 'Arabic' },
+  { value: 'Russian', label: 'Russian' },
   { value: 'Scandinavian', label: 'Scandinavian' },
-  { value: 'Greek', label: 'Greek' },
-  { value: 'French', label: 'French' },
-  { value: 'Indian', label: 'Indian' },
-  { value: 'African', label: 'African' },
-  { value: 'Hebrew', label: 'Hebrew' },
-  { value: 'English', label: 'English' },
+  { value: 'Spanish', label: 'Spanish' },
 ]
 
 export default function NameForm({ onSubmit, isLoading }) {
