@@ -1,4 +1,4 @@
-const API_URL = 'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2'
+const API_URL = 'https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2'
 
 function buildPrompt(gender, style, origin, count) {
   const genderText = gender === 'surprise' ? 'any gender (mix of boy and girl names)' : `a ${gender}`
