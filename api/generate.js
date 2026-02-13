@@ -21,6 +21,13 @@ Respond with ONLY a JSON array in this exact format, nothing else:
   ]
 }
 
+function extractErrorMessage(errorData, status) {
+  if (typeof errorData.error === 'string') return errorData.error
+  if (typeof errorData.error === 'object' && errorData.error?.message) return errorData.error.message
+  if (typeof errorData.message === 'string') return errorData.message
+  return `API error: ${status}`
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -55,16 +62,23 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      const msg = extractErrorMessage(errorData, response.status)
+      console.error('HF API error:', response.status, JSON.stringify(errorData))
       if (response.status === 503) {
         return res.status(503).json({ error: 'The AI model is loading. Please wait a moment and try again.' })
       }
-      return res.status(response.status).json({ error: errorData.error || errorData.message || `API error: ${response.status}` })
+      return res.status(response.status).json({ error: msg })
     }
 
     const data = await response.json()
     const text = data.choices?.[0]?.message?.content || ''
+    if (!text) {
+      console.error('Empty response from HF:', JSON.stringify(data))
+      return res.status(502).json({ error: 'Got an empty response from the AI. Please try again.' })
+    }
     return res.status(200).json({ generated_text: text })
   } catch (err) {
+    console.error('Fetch error:', err.message)
     return res.status(500).json({ error: 'Failed to reach the AI service. Please try again.' })
   }
 }
