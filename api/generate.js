@@ -112,10 +112,18 @@ function normalizeAndValidateItems(items, origin, count) {
   const dedupe = new Set()
 
   for (const item of items) {
-    const name = String(item?.name || '').trim()
-    const nativeName = String(item?.nativeName || '').trim()
+    let name = String(item?.name || '').trim()
+    let nativeName = String(item?.nativeName || '').trim()
     const meaning = String(item?.meaning || '').trim()
     const itemOrigin = String(item?.origin || origin || 'Various').trim()
+
+    // If name has non-Latin characters and nativeName is Latin, the model swapped them
+    if (name && !isLatinOnly(name) && nativeName && isLatinOnly(nativeName)) {
+      const temp = name
+      name = nativeName
+      nativeName = temp
+    }
+
     const key = name.toLocaleLowerCase()
 
     if (!looksLikeName(name)) continue

@@ -1,3 +1,8 @@
+function isLatinOnly(text) {
+  if (!text || typeof text !== 'string') return false
+  return /^[\p{Script=Latin}\p{M}' -]+$/u.test(text)
+}
+
 function isSafeText(value, maxLength = 80) {
   if (!value || typeof value !== 'string') return false
   const trimmed = value.trim()
@@ -15,10 +20,18 @@ function sanitizeNameItems(items, count) {
   const cleaned = []
 
   for (const item of items) {
-    const name = String(item?.name || '').trim()
-    const nativeName = item?.nativeName ? String(item.nativeName).trim() : null
+    let name = String(item?.name || '').trim()
+    let nativeName = item?.nativeName ? String(item.nativeName).trim() : null
     const meaning = String(item?.meaning || 'A lovely name').trim()
     const origin = String(item?.origin || 'Various').trim()
+
+    // If name has non-Latin characters and nativeName is Latin, the model swapped them
+    if (name && !isLatinOnly(name) && nativeName && isLatinOnly(nativeName)) {
+      const temp = name
+      name = nativeName
+      nativeName = temp
+    }
+
     const dedupeKey = name.toLocaleLowerCase()
 
     if (!isSafeText(name, 40) || !isSafeText(meaning, 160) || !isSafeText(origin, 40)) continue
