@@ -16,6 +16,7 @@ function sanitizeNameItems(items, count) {
 
   for (const item of items) {
     const name = String(item?.name || '').trim()
+    const nativeName = item?.nativeName ? String(item.nativeName).trim() : null
     const meaning = String(item?.meaning || 'A lovely name').trim()
     const origin = String(item?.origin || 'Various').trim()
     const dedupeKey = name.toLocaleLowerCase()
@@ -24,7 +25,11 @@ function sanitizeNameItems(items, count) {
     if (unique.has(dedupeKey)) continue
 
     unique.add(dedupeKey)
-    cleaned.push({ name, meaning, origin })
+    const entry = { name, meaning, origin }
+    if (nativeName && isSafeText(nativeName, 40)) {
+      entry.nativeName = nativeName
+    }
+    cleaned.push(entry)
     if (cleaned.length >= count) break
   }
 

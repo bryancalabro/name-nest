@@ -44,6 +44,7 @@ export default function App() {
   const [showFavorites, setShowFavorites] = useState(false)
   const [lastParams, setLastParams] = useState(null)
   const [hasGenerated, setHasGenerated] = useState(false)
+  const [showNativeScript, setShowNativeScript] = useState(false)
 
   useEffect(() => {
     saveFavorites(favorites)
@@ -154,6 +155,8 @@ export default function App() {
               favorites={favorites}
               onRemove={removeFavorite}
               onClose={() => setShowFavorites(false)}
+              showNativeScript={showNativeScript}
+              onToggleNativeScript={() => setShowNativeScript((prev) => !prev)}
             />
           </div>
         ) : (
@@ -193,12 +196,40 @@ export default function App() {
                 <h2 className="text-center text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
                   Name Suggestions
                 </h2>
+
+                {names.some((n) => n.nativeName) && (
+                  <div className="flex items-center justify-center gap-2 mb-4">
+                    <span className={`text-xs font-medium ${!showNativeScript ? 'text-gray-700' : 'text-gray-400'}`}>
+                      English
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowNativeScript((prev) => !prev)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+                        showNativeScript ? 'bg-violet-500' : 'bg-gray-300'
+                      }`}
+                      aria-label={showNativeScript ? 'Show English names' : 'Show native script names'}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          showNativeScript ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                    <span className={`text-xs font-medium ${showNativeScript ? 'text-gray-700' : 'text-gray-400'}`}>
+                      Native Script
+                    </span>
+                  </div>
+                )}
+
                 {names.map((nameObj, i) => (
                   <NameCard
                     key={`${nameObj.name}-${i}`}
                     name={nameObj.name}
+                    nativeName={nameObj.nativeName}
                     meaning={nameObj.meaning}
                     origin={nameObj.origin}
+                    showNativeScript={showNativeScript}
                     isFavorite={isFavorite(nameObj.name)}
                     onToggleFavorite={() => toggleFavorite(nameObj)}
                     index={i}
