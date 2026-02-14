@@ -9,9 +9,10 @@ const COLORS = [
   { bg: 'bg-pink-50', badge: 'bg-pink-100 text-pink-600' },
 ]
 
-export default function NameCard({ name, meaning, origin, isFavorite, onToggleFavorite, index }) {
+export default function NameCard({ name, nativeName, meaning, origin, showNativeScript, isFavorite, onToggleFavorite, index }) {
   const [heartAnimating, setHeartAnimating] = useState(false)
   const color = COLORS[index % COLORS.length]
+  const displayName = showNativeScript && nativeName ? nativeName : name
 
   function handleFavorite() {
     setHeartAnimating(true)
@@ -24,8 +25,11 @@ export default function NameCard({ name, meaning, origin, isFavorite, onToggleFa
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
           <h3 className="text-2xl font-bold text-gray-800 mb-1">
-            {name}
+            {displayName}
           </h3>
+          {showNativeScript && nativeName && (
+            <p className="text-xs text-gray-400 mb-1">{name}</p>
+          )}
           <p className="text-sm text-gray-500 leading-relaxed mb-2">
             {meaning}
           </p>

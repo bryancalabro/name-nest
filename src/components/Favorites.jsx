@@ -1,4 +1,4 @@
-export default function Favorites({ favorites, onRemove, onClose }) {
+export default function Favorites({ favorites, onRemove, onClose, showNativeScript, onToggleNativeScript }) {
   if (favorites.length === 0) {
     return (
       <div className="animate-fade-in-up text-center py-12 px-6">
@@ -39,13 +39,43 @@ export default function Favorites({ favorites, onRemove, onClose }) {
         </button>
       </div>
 
-      {favorites.map((fav, i) => (
+      {favorites.some((f) => f.nativeName) && (
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <span className={`text-xs font-medium ${!showNativeScript ? 'text-gray-700' : 'text-gray-400'}`}>
+            English
+          </span>
+          <button
+            type="button"
+            onClick={onToggleNativeScript}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+              showNativeScript ? 'bg-violet-500' : 'bg-gray-300'
+            }`}
+            aria-label={showNativeScript ? 'Show English names' : 'Show native script names'}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                showNativeScript ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+          <span className={`text-xs font-medium ${showNativeScript ? 'text-gray-700' : 'text-gray-400'}`}>
+            Native Script
+          </span>
+        </div>
+      )}
+
+      {favorites.map((fav, i) => {
+        const displayName = showNativeScript && fav.nativeName ? fav.nativeName : fav.name
+        return (
         <div
           key={`${fav.name}-${fav.origin}`}
           className={`animate-fade-in-up stagger-${i + 1} flex items-center justify-between bg-white rounded-xl p-4 border border-gray-100`}
         >
           <div className="flex-1 min-w-0">
-            <p className="font-bold text-gray-800 text-lg">{fav.name}</p>
+            <p className="font-bold text-gray-800 text-lg">{displayName}</p>
+            {showNativeScript && fav.nativeName && (
+              <p className="text-xs text-gray-400">{fav.name}</p>
+            )}
             <p className="text-xs text-gray-500 truncate">
               {fav.meaning} &middot; {fav.origin}
             </p>
@@ -60,7 +90,8 @@ export default function Favorites({ favorites, onRemove, onClose }) {
             </svg>
           </button>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

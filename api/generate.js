@@ -51,6 +51,8 @@ function extractJsonArray(text) {
   }
 }
 
+const SCRIPT_ORIGINS = new Set(['Arabic', 'Hebrew', 'Greek', 'Russian', 'Japanese'])
+
 function containsScript(text, script) {
   if (typeof text !== 'string') return false
 
@@ -63,6 +65,11 @@ function containsScript(text, script) {
   }
 
   return patterns[script] ? patterns[script].test(text) : true
+}
+
+function isLatinOnly(text) {
+  if (typeof text !== 'string') return false
+  return /^[\p{Script=Latin}\p{M}' -]+$/u.test(text)
 }
 
 function isCleanText(value, maxLength = 120) {
@@ -106,6 +113,7 @@ function normalizeAndValidateItems(items, origin, count) {
 
   for (const item of items) {
     const name = String(item?.name || '').trim()
+    const nativeName = String(item?.nativeName || '').trim()
     const meaning = String(item?.meaning || '').trim()
     const itemOrigin = String(item?.origin || origin || 'Various').trim()
     const key = name.toLocaleLowerCase()
@@ -116,16 +124,18 @@ function normalizeAndValidateItems(items, origin, count) {
     if (disallowedNameWords.has(key)) continue
     if (dedupe.has(key)) continue
 
-    if (origin !== 'any') {
-      if (origin === 'Arabic' && !containsScript(name, 'Arabic')) continue
-      if (origin === 'Hebrew' && !containsScript(name, 'Hebrew')) continue
-      if (origin === 'Greek' && !containsScript(name, 'Greek')) continue
-      if (origin === 'Russian' && !containsScript(name, 'Russian')) continue
-      if (origin === 'Japanese' && !containsScript(name, 'Japanese')) continue
+    const entry = { name, meaning, origin: itemOrigin }
+
+    if (SCRIPT_ORIGINS.has(origin)) {
+      if (nativeName && looksLikeName(nativeName) && containsScript(nativeName, origin)) {
+        entry.nativeName = nativeName
+      }
+    } else if (origin === 'any' && nativeName && looksLikeName(nativeName) && !isLatinOnly(nativeName)) {
+      entry.nativeName = nativeName
     }
 
     dedupe.add(key)
-    result.push({ name, meaning, origin: itemOrigin })
+    result.push(entry)
     if (result.length >= count) break
   }
 
@@ -135,9 +145,22 @@ function normalizeAndValidateItems(items, origin, count) {
 function buildMessages(gender, style, origin, count) {
   const genderText = gender === 'surprise' ? 'any gender (mix of boy and girl names)' : `a ${gender}`
   const originText = origin === 'any' ? 'any cultural origin' : origin
-  const scriptInstruction = origin === 'any'
-    ? 'Use culturally accurate names. If a name is commonly written in a non-Latin script, keep its native script.'
-    : `Use authentic ${origin} names. Keep names in their native script when applicable (for example Arabic in Arabic script).`
+
+  const hasNativeScript = SCRIPT_ORIGINS.has(origin)
+  const isAny = origin === 'any'
+
+  let scriptInstruction
+  let formatExample
+  if (hasNativeScript) {
+    scriptInstruction = `Use authentic ${origin} names. The "name" field must be the Latin/English transliteration. The "nativeName" field must be the name written in its native script (e.g. Cyrillic for Russian, Arabic script for Arabic, Greek script for Greek, Hebrew script for Hebrew, Hiragana/Katakana/Kanji for Japanese).`
+    formatExample = `[{"name": "Igor", "nativeName": "\u0418\u0433\u043e\u0440\u044c", "meaning": "meaning here", "origin": "origin here"}]`
+  } else if (isAny) {
+    scriptInstruction = `Use culturally accurate names from diverse origins. The "name" field must always be in Latin/English script. If a name comes from a non-Latin script culture, also include a "nativeName" field with the name in its native script. If the name is already Latin-based, omit "nativeName".`
+    formatExample = `[{"name": "Igor", "nativeName": "\u0418\u0433\u043e\u0440\u044c", "meaning": "warrior", "origin": "Russian"}, {"name": "Clara", "meaning": "bright", "origin": "Italian"}]`
+  } else {
+    scriptInstruction = `Use authentic ${origin} names. Names should be in their standard English/Latin spelling.`
+    formatExample = `[{"name": "Example", "meaning": "meaning here", "origin": "origin here"}]`
+  }
 
   return [
     {
@@ -154,7 +177,7 @@ Do not include explanations outside the JSON array.
 Each "name" must be a real given name, not a sentence, heading, or instruction word.
 
 Respond with ONLY a JSON array in this exact format, nothing else:
-[{"name": "Example", "meaning": "meaning here", "origin": "origin here"}]`,
+${formatExample}`,
     },
   ]
 }
