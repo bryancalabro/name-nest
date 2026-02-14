@@ -1,22 +1,3 @@
-function parseFallbackText(text, count) {
-  const names = []
-  const lines = text.split('\n').filter(l => l.trim())
-
-  for (const line of lines) {
-    const nameMatch = line.match(/(?:\d+\.\s*)?(?:\*\*)?([\p{L}\p{M}][\p{L}\p{M}\s'-]{0,39})(?:\*\*)?/u)
-    if (nameMatch && names.length < count) {
-      const meaningMatch = line.match(/(?:meaning|means?)[:\s]+["']?([^"'\n,]+)/i)
-      const originMatch = line.match(/(?:origin)[:\s]+["']?([^"'\n,]+)/i)
-      names.push({
-        name: nameMatch[1].trim(),
-        meaning: meaningMatch ? meaningMatch[1].trim() : 'A beautiful name',
-        origin: originMatch ? originMatch[1].trim() : 'Various',
-      })
-    }
-  }
-  return names
-}
-
 function isSafeText(value, maxLength = 80) {
   if (!value || typeof value !== 'string') return false
   const trimmed = value.trim()
@@ -58,8 +39,22 @@ export async function generateNames(gender, style, origin, count = 6) {
   })
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.error || `Something went wrong. Please try again.`)
+    const contentType = response.headers.get('content-type') || ''
+    let message = ''
+
+    if (contentType.includes('application/json')) {
+      const errorData = await response.json().catch(() => ({}))
+      message = errorData.error || errorData.message || ''
+    } else {
+      const rawText = await response.text().catch(() => '')
+      message = rawText.slice(0, 240).trim()
+    }
+
+    if (!message && response.status === 404) {
+      message = 'API route not found. If running locally, start with `vercel dev` so `/api/generate` is available.'
+    }
+
+    throw new Error(message || `Request failed (${response.status}). Please try again.`)
   }
 
   const data = await response.json()
@@ -77,9 +72,6 @@ export async function generateNames(gender, style, origin, count = 6) {
       // JSON parse failed, try fallback
     }
   }
-
-  const fallback = sanitizeNameItems(parseFallbackText(generatedText, count), count)
-  if (fallback.length > 0) return fallback
 
   throw new Error('Could not parse name suggestions. Please try again.')
 }

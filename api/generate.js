@@ -1,4 +1,5 @@
 const API_URL = 'https://router.huggingface.co/v1/chat/completions'
+const MODEL_CANDIDATES = ['Qwen/Qwen2.5-7B-Instruct', 'HuggingFaceTB/SmolLM3-3B']
 
 const VALID_GENDERS = new Set(['boy', 'girl', 'neutral', 'surprise'])
 const VALID_STYLES = new Set(['classic', 'modern', 'unique', 'nature-inspired', 'vintage'])
@@ -29,6 +30,108 @@ function parseCount(value) {
   return Math.min(Math.max(parsed, 1), 10)
 }
 
+function extractJsonArray(text) {
+  if (typeof text !== 'string' || !text.trim()) return null
+
+  try {
+    const direct = JSON.parse(text)
+    if (Array.isArray(direct)) return direct
+  } catch {
+    // continue
+  }
+
+  const match = text.match(/\[[\s\S]*\]/)
+  if (!match) return null
+
+  try {
+    const parsed = JSON.parse(match[0])
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function containsScript(text, script) {
+  if (typeof text !== 'string') return false
+
+  const patterns = {
+    Arabic: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/u,
+    Hebrew: /[\u0590-\u05FF]/u,
+    Greek: /[\u0370-\u03FF\u1F00-\u1FFF]/u,
+    Russian: /[\u0400-\u04FF]/u,
+    Japanese: /[\u3040-\u30FF\u31F0-\u31FF\u4E00-\u9FFF]/u,
+  }
+
+  return patterns[script] ? patterns[script].test(text) : true
+}
+
+function isCleanText(value, maxLength = 120) {
+  if (typeof value !== 'string') return false
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > maxLength) return false
+
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const code = trimmed.charCodeAt(i)
+    if ((code >= 0 && code <= 31) || code === 127) return false
+  }
+
+  if (/[{}<>[\]`$\\]/.test(trimmed)) return false
+  return true
+}
+
+function looksLikeName(value) {
+  if (!isCleanText(value, 40)) return false
+  const words = value.trim().split(/\s+/)
+  if (words.length > 3) return false
+  return /^[\p{L}\p{M}' -]+$/u.test(value)
+}
+
+function normalizeAndValidateItems(items, origin, count) {
+  if (!Array.isArray(items)) return []
+
+  const disallowedNameWords = new Set([
+    'think',
+    'okay',
+    'first',
+    'next',
+    'then',
+    'name',
+    'names',
+    'example',
+    'here',
+  ])
+
+  const result = []
+  const dedupe = new Set()
+
+  for (const item of items) {
+    const name = String(item?.name || '').trim()
+    const meaning = String(item?.meaning || '').trim()
+    const itemOrigin = String(item?.origin || origin || 'Various').trim()
+    const key = name.toLocaleLowerCase()
+
+    if (!looksLikeName(name)) continue
+    if (!isCleanText(meaning, 180)) continue
+    if (!isCleanText(itemOrigin, 60)) continue
+    if (disallowedNameWords.has(key)) continue
+    if (dedupe.has(key)) continue
+
+    if (origin !== 'any') {
+      if (origin === 'Arabic' && !containsScript(name, 'Arabic')) continue
+      if (origin === 'Hebrew' && !containsScript(name, 'Hebrew')) continue
+      if (origin === 'Greek' && !containsScript(name, 'Greek')) continue
+      if (origin === 'Russian' && !containsScript(name, 'Russian')) continue
+      if (origin === 'Japanese' && !containsScript(name, 'Japanese')) continue
+    }
+
+    dedupe.add(key)
+    result.push({ name, meaning, origin: itemOrigin })
+    if (result.length >= count) break
+  }
+
+  return result
+}
+
 function buildMessages(gender, style, origin, count) {
   const genderText = gender === 'surprise' ? 'any gender (mix of boy and girl names)' : `a ${gender}`
   const originText = origin === 'any' ? 'any cultural origin' : origin
@@ -48,6 +151,7 @@ function buildMessages(gender, style, origin, count) {
 For each name, provide the name, its meaning, and cultural origin. ${scriptInstruction}
 Do not include code blocks or markdown.
 Do not include explanations outside the JSON array.
+Each "name" must be a real given name, not a sentence, heading, or instruction word.
 
 Respond with ONLY a JSON array in this exact format, nothing else:
 [{"name": "Example", "meaning": "meaning here", "origin": "origin here"}]`,
@@ -81,40 +185,70 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Invalid request fields.' })
   }
 
-  const messages = buildMessages(gender, style, origin, count)
-
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        model: 'HuggingFaceTB/SmolLM3-3B',
-        messages,
-        max_tokens: 800,
-        temperature: 0.8,
-      }),
-    })
+    for (const model of MODEL_CANDIDATES) {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const messages = buildMessages(gender, style, origin, count)
+        if (attempt === 1) {
+          messages.push({
+            role: 'user',
+            content: 'Retry with stricter compliance: return only valid JSON and ensure every name is culturally correct for the selected origin.',
+          })
+        }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      const msg = extractErrorMessage(errorData, response.status)
-      console.error('HF API error:', response.status, JSON.stringify(errorData))
-      if (response.status === 503) {
-        return res.status(503).json({ error: 'The AI model is loading. Please wait a moment and try again.' })
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            max_tokens: 800,
+            temperature: 0.7,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          const msg = extractErrorMessage(errorData, response.status)
+          console.error('HF API error:', model, response.status, JSON.stringify(errorData))
+
+          if (response.status === 401 || response.status === 403) {
+            return res.status(response.status).json({ error: msg })
+          }
+
+          if (response.status === 503) {
+            continue
+          }
+
+          if (attempt === 1) {
+            break
+          }
+          continue
+        }
+
+        const data = await response.json()
+        const text = data.choices?.[0]?.message?.content || ''
+        if (!text) {
+          console.error('Empty response from HF:', model, JSON.stringify(data))
+          continue
+        }
+
+        const parsed = extractJsonArray(text)
+        const validItems = normalizeAndValidateItems(parsed, origin, count)
+        if (validItems.length >= Math.min(count, 3)) {
+          return res.status(200).json({ generated_text: JSON.stringify(validItems) })
+        }
+
+        console.error('Model returned invalid names:', model, text)
       }
-      return res.status(response.status).json({ error: msg })
     }
 
-    const data = await response.json()
-    const text = data.choices?.[0]?.message?.content || ''
-    if (!text) {
-      console.error('Empty response from HF:', JSON.stringify(data))
-      return res.status(502).json({ error: 'Got an empty response from the AI. Please try again.' })
-    }
-    return res.status(200).json({ generated_text: text })
+    return res.status(502).json({
+      error: 'The AI returned invalid name data for this request. Please try again.',
+    })
   } catch (err) {
     console.error('Fetch error:', err.message)
     return res.status(500).json({ error: 'Failed to reach the AI service. Please try again.' })
