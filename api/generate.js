@@ -93,8 +93,10 @@ function looksLikeName(value) {
   return /^[\p{L}\p{M}' -]+$/u.test(value)
 }
 
-function normalizeAndValidateItems(items, origin, count) {
+function normalizeAndValidateItems(items, origin, count, excludeNames = []) {
   if (!Array.isArray(items)) return []
+
+  const exclude = new Set(excludeNames.map((n) => String(n).toLocaleLowerCase()))
 
   const disallowedNameWords = new Set([
     'think',
@@ -124,21 +126,25 @@ function normalizeAndValidateItems(items, origin, count) {
       nativeName = temp
     }
 
+    // If name is non-Latin and no nativeName exists, the model only gave native script
+    if (name && !isLatinOnly(name) && !nativeName) {
+      nativeName = name
+      name = ''
+    }
+
+    if (!name || !looksLikeName(name)) continue
+
     const key = name.toLocaleLowerCase()
 
-    if (!looksLikeName(name)) continue
     if (!isCleanText(meaning, 180)) continue
     if (!isCleanText(itemOrigin, 60)) continue
     if (disallowedNameWords.has(key)) continue
     if (dedupe.has(key)) continue
+    if (exclude.has(key)) continue
 
     const entry = { name, meaning, origin: itemOrigin }
 
-    if (SCRIPT_ORIGINS.has(origin)) {
-      if (nativeName && looksLikeName(nativeName) && containsScript(nativeName, origin)) {
-        entry.nativeName = nativeName
-      }
-    } else if (origin === 'any' && nativeName && looksLikeName(nativeName) && !isLatinOnly(nativeName)) {
+    if (nativeName && looksLikeName(nativeName) && !isLatinOnly(nativeName)) {
       entry.nativeName = nativeName
     }
 
@@ -150,7 +156,7 @@ function normalizeAndValidateItems(items, origin, count) {
   return result
 }
 
-function buildMessages(gender, style, origin, count) {
+function buildMessages(gender, style, origin, count, excludeNames = []) {
   const genderText = gender === 'surprise' ? 'any gender (mix of boy and girl names)' : `a ${gender}`
   const originText = origin === 'any' ? 'any cultural origin' : origin
 
@@ -160,15 +166,19 @@ function buildMessages(gender, style, origin, count) {
   let scriptInstruction
   let formatExample
   if (hasNativeScript) {
-    scriptInstruction = `Use authentic ${origin} names. The "name" field must be the Latin/English transliteration. The "nativeName" field must be the name written in its native script (e.g. Cyrillic for Russian, Arabic script for Arabic, Greek script for Greek, Hebrew script for Hebrew, Hiragana/Katakana/Kanji for Japanese).`
+    scriptInstruction = `Use authentic ${origin} names. IMPORTANT: The "name" field MUST be the Latin/English transliteration (Latin letters only, e.g. "Igor" not "Игорь"). The "nativeName" field must be the name written in its native script (e.g. Cyrillic for Russian, Arabic script for Arabic, Greek script for Greek, Hebrew script for Hebrew, Hiragana/Katakana/Kanji for Japanese).`
     formatExample = `[{"name": "Igor", "nativeName": "\u0418\u0433\u043e\u0440\u044c", "meaning": "meaning here", "origin": "origin here"}]`
   } else if (isAny) {
-    scriptInstruction = `Use culturally accurate names from diverse origins. The "name" field must always be in Latin/English script. If a name comes from a non-Latin script culture, also include a "nativeName" field with the name in its native script. If the name is already Latin-based, omit "nativeName".`
+    scriptInstruction = `Use culturally accurate names from diverse origins. The "name" field must always be in Latin/English script (Latin letters only). If a name comes from a non-Latin script culture, also include a "nativeName" field with the name in its native script. If the name is already Latin-based, omit "nativeName".`
     formatExample = `[{"name": "Igor", "nativeName": "\u0418\u0433\u043e\u0440\u044c", "meaning": "warrior", "origin": "Russian"}, {"name": "Clara", "meaning": "bright", "origin": "Italian"}]`
   } else {
     scriptInstruction = `Use authentic ${origin} names. Names should be in their standard English/Latin spelling.`
     formatExample = `[{"name": "Example", "meaning": "meaning here", "origin": "origin here"}]`
   }
+
+  const excludeInstruction = excludeNames.length > 0
+    ? `\nDo NOT use any of these names (already shown): ${excludeNames.join(', ')}.`
+    : ''
 
   return [
     {
@@ -177,7 +187,7 @@ function buildMessages(gender, style, origin, count) {
     },
     {
       role: 'user',
-      content: `Generate exactly ${count} unique baby names for ${genderText}. Style: ${style}. Cultural origin: ${originText}.
+      content: `Generate exactly ${count} unique baby names for ${genderText}. Style: ${style}. Cultural origin: ${originText}.${excludeInstruction}
 
 For each name, provide the name, its meaning, and cultural origin. ${scriptInstruction}
 Do not include code blocks or markdown.
@@ -211,6 +221,9 @@ export default async function handler(req, res) {
   const style = normalizeChoice(req.body?.style)
   const origin = normalizeChoice(req.body?.origin)
   const count = parseCount(req.body?.count)
+  const exclude = Array.isArray(req.body?.exclude)
+    ? req.body.exclude.filter((n) => typeof n === 'string').slice(0, 50)
+    : []
 
   if (!VALID_GENDERS.has(gender) || !VALID_STYLES.has(style) || !VALID_ORIGINS.has(origin) || count === null) {
     return res.status(400).json({ error: 'Invalid request fields.' })
@@ -219,11 +232,11 @@ export default async function handler(req, res) {
   try {
     for (const model of MODEL_CANDIDATES) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
-        const messages = buildMessages(gender, style, origin, count)
+        const messages = buildMessages(gender, style, origin, count, exclude)
         if (attempt === 1) {
           messages.push({
             role: 'user',
-            content: 'Retry with stricter compliance: return only valid JSON and ensure every name is culturally correct for the selected origin.',
+            content: 'Retry with stricter compliance: return only valid JSON and ensure every "name" field uses ONLY Latin/English letters. Ensure every name is culturally correct for the selected origin.',
           })
         }
 
@@ -268,7 +281,7 @@ export default async function handler(req, res) {
         }
 
         const parsed = extractJsonArray(text)
-        const validItems = normalizeAndValidateItems(parsed, origin, count)
+        const validItems = normalizeAndValidateItems(parsed, origin, count, exclude)
         if (validItems.length >= Math.min(count, 3)) {
           return res.status(200).json({ generated_text: JSON.stringify(validItems) })
         }
