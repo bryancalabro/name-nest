@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import NameForm from './components/NameForm'
 import NameCard from './components/NameCard'
 import Favorites from './components/Favorites'
@@ -45,6 +45,7 @@ export default function App() {
   const [lastParams, setLastParams] = useState(null)
   const [hasGenerated, setHasGenerated] = useState(false)
   const [showNativeScript, setShowNativeScript] = useState(false)
+  const seenNamesRef = useRef([])
 
   useEffect(() => {
     saveFavorites(favorites)
@@ -56,9 +57,11 @@ export default function App() {
     setNames([])
     setLastParams(params)
     setShowFavorites(false)
+    seenNamesRef.current = []
 
     try {
       const results = await generateNames(params.gender, params.style, params.origin, params.count)
+      seenNamesRef.current = results.map((n) => n.name)
       setNames(results)
       setHasGenerated(true)
     } catch (err) {
@@ -75,7 +78,8 @@ export default function App() {
     setNames([])
 
     try {
-      const results = await generateNames(lastParams.gender, lastParams.style, lastParams.origin, lastParams.count)
+      const results = await generateNames(lastParams.gender, lastParams.style, lastParams.origin, lastParams.count, seenNamesRef.current)
+      seenNamesRef.current = [...seenNamesRef.current, ...results.map((n) => n.name)]
       setNames(results)
     } catch (err) {
       setError(err.message)

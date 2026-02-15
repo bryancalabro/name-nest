@@ -32,6 +32,11 @@ function sanitizeNameItems(items, count) {
       nativeName = temp
     }
 
+    // If name is non-Latin and no nativeName, move to nativeName and skip (no Latin version)
+    if (name && !isLatinOnly(name) && !nativeName) {
+      continue
+    }
+
     const dedupeKey = name.toLocaleLowerCase()
 
     if (!isSafeText(name, 40) || !isSafeText(meaning, 160) || !isSafeText(origin, 40)) continue
@@ -49,11 +54,11 @@ function sanitizeNameItems(items, count) {
   return cleaned
 }
 
-export async function generateNames(gender, style, origin, count = 6) {
+export async function generateNames(gender, style, origin, count = 6, exclude = []) {
   const response = await fetch('/api/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gender, style, origin, count }),
+    body: JSON.stringify({ gender, style, origin, count, exclude }),
   })
 
   if (!response.ok) {
