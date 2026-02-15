@@ -60,7 +60,7 @@ export default function App() {
     seenNamesRef.current = []
 
     try {
-      const results = await generateNames(params.gender, params.style, params.origin, params.count)
+      const results = await generateNames(params.gender, params.style, params.origin, 5)
       seenNamesRef.current = results.map((n) => n.name)
       setNames(results)
       setHasGenerated(true)
@@ -78,7 +78,7 @@ export default function App() {
     setNames([])
 
     try {
-      const results = await generateNames(lastParams.gender, lastParams.style, lastParams.origin, lastParams.count, seenNamesRef.current)
+      const results = await generateNames(lastParams.gender, lastParams.style, lastParams.origin, 5, seenNamesRef.current)
       seenNamesRef.current = [...seenNamesRef.current, ...results.map((n) => n.name)]
       setNames(results)
     } catch (err) {

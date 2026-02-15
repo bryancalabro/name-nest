@@ -36,11 +36,10 @@ export default function NameForm({ onSubmit, isLoading }) {
   const [gender, setGender] = useState('girl')
   const [style, setStyle] = useState('classic')
   const [origin, setOrigin] = useState('any')
-  const [count, setCount] = useState(6)
 
   function handleSubmit(e) {
     e.preventDefault()
-    onSubmit({ gender, style, origin, count })
+    onSubmit({ gender, style, origin })
   }
 
   return (
@@ -106,29 +105,6 @@ export default function NameForm({ onSubmit, isLoading }) {
             <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
-      </div>
-
-      {/* Count */}
-      <div>
-        <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">
-          Number of Names: <span className="text-rose-500">{count}</span>
-        </label>
-        <input
-          type="range"
-          min="1"
-          max="10"
-          value={count}
-          onChange={(e) => setCount(Number(e.target.value))}
-          className="w-full h-2 rounded-full appearance-none cursor-pointer accent-rose-500"
-          style={{
-            background: `linear-gradient(to right, #f43f5e 0%, #f43f5e ${((count - 1) / 9) * 100}%, #e5e7eb ${((count - 1) / 9) * 100}%, #e5e7eb 100%)`,
-          }}
-        />
-        <div className="flex justify-between text-xs text-gray-400 mt-1 px-1">
-          <span>1</span>
-          <span>5</span>
-          <span>10</span>
-        </div>
       </div>
 
       {/* Submit */}
